@@ -11,7 +11,8 @@ interface Notice {
   category: "Exam" | "Event" | "General";
   priority: "Normal" | "Urgent";
   publishDate: string;
-  image: string | null;
+  imageUrl: string | null;
+  imagePublicId: string | null;
 }
 
 interface EditNoticeProps {
@@ -52,7 +53,7 @@ export default function EditNotice({ notice }: EditNoticeProps) {
             Edit Notice
           </h1>
           <p className="text-muted-foreground text-sm">
-            Modify the details of the notice below and save your changes.
+            Modify the fields below to update the published notice on the board.
           </p>
         </div>
 
@@ -70,18 +71,17 @@ export async function getServerSideProps(context: any) {
   try {
     const { id } = context.params;
 
-    if (!id || typeof id !== "string") {
-      return { notFound: true };
-    }
-
     const noticeData = await prisma.notice.findUnique({
       where: { id },
     });
 
     if (!noticeData) {
-      return { notFound: true };
+      return {
+        notFound: true,
+      };
     }
 
+    // Serialize dates for props injection
     const notice = JSON.parse(JSON.stringify(noticeData));
 
     return {
@@ -90,7 +90,9 @@ export async function getServerSideProps(context: any) {
       },
     };
   } catch (error) {
-    console.error("Error loading notice in getServerSideProps:", error);
-    return { notFound: true };
+    console.error("Error fetching notice in getServerSideProps:", error);
+    return {
+      notFound: true,
+    };
   }
 }

@@ -31,7 +31,8 @@ model Notice {
   category    Category
   priority    Priority @default(Normal)
   publishDate DateTime
-  image       String?  // optional URL/path, bonus feature
+  imageUrl      String?
+  imagePublicId  String?
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

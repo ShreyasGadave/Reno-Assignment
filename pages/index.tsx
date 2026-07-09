@@ -11,7 +11,8 @@ interface Notice {
   category: "Exam" | "Event" | "General";
   priority: "Normal" | "Urgent";
   publishDate: string;
-  image: string | null;
+  imageUrl: string | null;
+  imagePublicId: string | null;
 }
 
 interface HomeProps {
@@ -43,22 +44,28 @@ export default function Home({ notices }: HomeProps) {
           </p>
         </div>
 
-        {/* Notices Grid */}
+        {/* Notices Cards Grid */}
         {notices.length === 0 ? (
-          <div className="flex flex-col items-center justify-center border border-dashed border-border rounded-2xl p-12 text-center bg-card">
-            <h3 className="text-lg font-semibold text-foreground mb-1">No notices posted yet</h3>
-            <p className="text-muted-foreground text-sm max-w-sm mb-6">
-              Create your first announcement notice to make it visible on the board.
-            </p>
-            <button
-              onClick={() => router.push("/notice/new")}
-              className="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/95 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          <div className="flex flex-col items-center justify-center p-12 bg-card rounded-2xl border border-border shadow-sm text-center">
+            <svg
+              className="size-16 text-muted-foreground/40 mb-4 stroke-[1.25]"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
             >
-              Post a Notice
-            </button>
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+              />
+            </svg>
+            <h3 className="text-lg font-semibold text-foreground">No active notices found</h3>
+            <p className="text-sm text-muted-foreground mt-1 max-w-sm">
+              There are currently no announcements. Check back later or add a new one.
+            </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {notices.map((notice) => (
               <NoticeCard
                 key={notice.id}

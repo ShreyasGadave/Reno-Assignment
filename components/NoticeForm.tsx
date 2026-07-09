@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { Trash2Icon, UploadCloudIcon } from "lucide-react";
+import { Trash2Icon, UploadCloudIcon, Loader2Icon } from "lucide-react";
 
 interface NoticeFormProps {
   initialData?: {
@@ -14,7 +14,8 @@ interface NoticeFormProps {
     category: "Exam" | "Event" | "General";
     priority: "Normal" | "Urgent";
     publishDate: string; // ISO date string or YYYY-MM-DD
-    image: string | null;
+    imageUrl: string | null;
+    imagePublicId: string | null;
   };
   onSubmit: (data: any) => Promise<void>;
   buttonText: string;
@@ -27,10 +28,17 @@ export default function NoticeForm({ initialData, onSubmit, buttonText }: Notice
   const [category, setCategory] = useState<"Exam" | "Event" | "General">("General");
   const [priority, setPriority] = useState<"Normal" | "Urgent">("Normal");
   const [publishDate, setPublishDate] = useState("");
-  const [image, setImage] = useState<string | null>(null); // holds URL or base64
+  
+  // Cloudinary image properties
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [imagePublicId, setImagePublicId] = useState<string | null>(null);
+  
+  // Selected local file and its preview URL
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Initialize fields on load/edit
@@ -40,8 +48,9 @@ export default function NoticeForm({ initialData, onSubmit, buttonText }: Notice
       setBody(initialData.body);
       setCategory(initialData.category);
       setPriority(initialData.priority);
-      setImage(initialData.image);
-      setImagePreview(initialData.image);
+      setImageUrl(initialData.imageUrl);
+      setImagePublicId(initialData.imagePublicId);
+      setImagePreview(initialData.imageUrl);
       
       // Format date to YYYY-MM-DD for standard html5 input
       if (initialData.publishDate) {
@@ -54,32 +63,32 @@ export default function NoticeForm({ initialData, onSubmit, buttonText }: Notice
     }
   }, [initialData]);
 
-  // Handle image upload and convert to base64
+  // Handle local image file selection and client-side validation
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      // Validate file type
+      if (!file.type.startsWith("image/")) {
+        setError("Only image files are allowed.");
+        return;
+      }
+      // Validate file size (5MB limit)
       if (file.size > 5 * 1024 * 1024) {
         setError("Image size must be less than 5MB.");
         return;
       }
       
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64 = reader.result as string;
-        setImage(base64); // Send this to API
-        setImagePreview(base64); // Visual preview
-        setError(null);
-      };
-      reader.onerror = () => {
-        setError("Failed to read image file.");
-      };
-      reader.readAsDataURL(file);
+      setSelectedFile(file);
+      setImagePreview(URL.createObjectURL(file));
+      setError(null);
     }
   };
 
-  // Remove selected image
+  // Remove selected image / clear existing image
   const handleRemoveImage = () => {
-    setImage(null);
+    setSelectedFile(null);
+    setImageUrl(null);
+    setImagePublicId(null);
     setImagePreview(null);
   };
 
@@ -88,13 +97,13 @@ export default function NoticeForm({ initialData, onSubmit, buttonText }: Notice
     e.preventDefault();
     setError(null);
 
-    // Validation checks
+    // Initial validation checks
     if (!title.trim()) {
       setError("Title is required.");
       return;
     }
     if (!body.trim()) {
-      setError("Body is required.");
+      setError("Body description is required.");
       return;
     }
     if (!publishDate) {
@@ -103,6 +112,40 @@ export default function NoticeForm({ initialData, onSubmit, buttonText }: Notice
     }
 
     setIsSubmitting(true);
+    let finalImageUrl = imageUrl;
+    let finalImagePublicId = imagePublicId;
+
+    // 1. If a new local file is selected, upload it to Cloudinary first
+    if (selectedFile) {
+      setIsUploading(true);
+      try {
+        const formData = new FormData();
+        formData.append("file", selectedFile);
+
+        const uploadRes = await fetch("/api/upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        const uploadData = await uploadRes.json();
+        if (!uploadRes.ok) {
+          throw new Error(uploadData.error || "Failed to upload image.");
+        }
+
+        finalImageUrl = uploadData.imageUrl;
+        finalImagePublicId = uploadData.publicId;
+      } catch (err: any) {
+        console.error("Client upload error:", err);
+        setError(err.message || "Failed to upload image. Please try again.");
+        setIsSubmitting(false);
+        setIsUploading(false);
+        return;
+      } finally {
+        setIsUploading(false);
+      }
+    }
+
+    // 2. Submit notice details to standard notices endpoint
     try {
       await onSubmit({
         title,
@@ -110,15 +153,18 @@ export default function NoticeForm({ initialData, onSubmit, buttonText }: Notice
         category,
         priority,
         publishDate: new Date(publishDate).toISOString(),
-        image,
+        imageUrl: finalImageUrl,
+        imagePublicId: finalImagePublicId,
       });
     } catch (err: any) {
-      console.error(err);
+      console.error("Save error:", err);
       setError(err.message || "Something went wrong while saving the notice.");
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  const isPending = isSubmitting || isUploading;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6 max-w-xl mx-auto bg-card p-6 rounded-2xl border border-border shadow-sm">
@@ -140,6 +186,7 @@ export default function NoticeForm({ initialData, onSubmit, buttonText }: Notice
           onChange={(e) => setTitle(e.target.value)}
           placeholder="Enter notice title"
           required
+          disabled={isPending}
           className="w-full"
         />
       </div>
@@ -155,6 +202,7 @@ export default function NoticeForm({ initialData, onSubmit, buttonText }: Notice
           onChange={(e) => setBody(e.target.value)}
           placeholder="Enter notice body description"
           required
+          disabled={isPending}
           rows={5}
           className="w-full resize-y"
         />
@@ -170,6 +218,7 @@ export default function NoticeForm({ initialData, onSubmit, buttonText }: Notice
             id="category"
             value={category}
             onChange={(e) => setCategory(e.target.value as any)}
+            disabled={isPending}
             className="w-full"
           >
             <NativeSelectOption value="General">General</NativeSelectOption>
@@ -187,6 +236,7 @@ export default function NoticeForm({ initialData, onSubmit, buttonText }: Notice
             id="priority"
             value={priority}
             onChange={(e) => setPriority(e.target.value as any)}
+            disabled={isPending}
             className="w-full"
           >
             <NativeSelectOption value="Normal">Normal</NativeSelectOption>
@@ -206,6 +256,7 @@ export default function NoticeForm({ initialData, onSubmit, buttonText }: Notice
           value={publishDate}
           onChange={(e) => setPublishDate(e.target.value)}
           required
+          disabled={isPending}
           className="w-full"
         />
       </div>
@@ -226,13 +277,14 @@ export default function NoticeForm({ initialData, onSubmit, buttonText }: Notice
                 className="size-16 object-cover rounded-lg border border-border"
               />
               <span className="text-xs text-muted-foreground truncate max-w-[150px] md:max-w-[250px]">
-                Image uploaded successfully
+                {selectedFile ? `Selected: ${selectedFile.name}` : "Image loaded"}
               </span>
             </div>
             <Button
               type="button"
               variant="ghost"
               size="icon"
+              disabled={isPending}
               onClick={handleRemoveImage}
               className="text-destructive hover:bg-destructive/10"
               title="Remove image"
@@ -246,10 +298,11 @@ export default function NoticeForm({ initialData, onSubmit, buttonText }: Notice
             <div className="text-sm text-foreground text-center">
               <span className="font-semibold text-primary">Click to upload</span> or drag and drop
             </div>
-            <p className="text-xs text-muted-foreground">PNG, JPG, GIF up to 5MB</p>
+            <p className="text-xs text-muted-foreground">PNG, JPG, GIF, WEBP up to 5MB</p>
             <input
               type="file"
               accept="image/*"
+              disabled={isPending}
               onChange={handleImageChange}
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
             />
@@ -263,12 +316,19 @@ export default function NoticeForm({ initialData, onSubmit, buttonText }: Notice
           type="button"
           variant="outline"
           onClick={() => router.push("/")}
-          disabled={isSubmitting}
+          disabled={isPending}
         >
           Cancel
         </Button>
-        <Button type="submit" disabled={isSubmitting} className="min-w-[120px]">
-          {isSubmitting ? "Saving..." : buttonText}
+        <Button type="submit" disabled={isPending} className="min-w-[140px] flex items-center justify-center gap-2">
+          {isPending && <Loader2Icon className="size-4 animate-spin" />}
+          <span>
+            {isUploading
+              ? "Uploading Image..."
+              : isSubmitting
+              ? "Saving Notice..."
+              : buttonText}
+          </span>
         </Button>
       </div>
     </form>

@@ -1,10 +1,12 @@
 import React, { useState } from "react";
 import Link from "next/link";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import Image from "next/image";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { CalendarIcon, EditIcon, Trash2Icon } from "lucide-react";
+import { CalendarIcon, EditIcon, Trash2Icon, FileImageIcon } from "lucide-react";
 import DeleteConfirm from "./DeleteConfirm";
+import { cn } from "@/lib/utils";
 
 interface Notice {
   id: string;
@@ -13,7 +15,8 @@ interface Notice {
   category: "Exam" | "Event" | "General";
   priority: "Normal" | "Urgent";
   publishDate: string;
-  image: string | null;
+  imageUrl: string | null;
+  imagePublicId: string | null;
 }
 
 interface NoticeCardProps {
@@ -63,18 +66,27 @@ export default function NoticeCard({ notice, onDeleteSuccess }: NoticeCardProps)
   const isUrgent = notice.priority === "Urgent";
 
   return (
-    <Card className={`relative flex flex-col h-full bg-card border ${isUrgent ? "border-red-500 ring-1 ring-red-500/20 shadow-md" : "border-border shadow-sm"} transition-all duration-200 hover:shadow-md`}>
-      {/* Optional image rendering */}
-      {notice.image && (
-        <div className="relative w-full h-48 overflow-hidden bg-muted border-b border-border">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={notice.image}
+    <Card className={`group/card relative flex flex-col h-full bg-card border ${isUrgent ? "border-red-500 ring-1 ring-red-500/20 shadow-md" : "border-border shadow-sm"} transition-all duration-200 hover:shadow-md`}>
+      {/* Responsive Aspect-Ratio Image or Placeholder to Prevent CLS */}
+      <div className="relative w-full aspect-video overflow-hidden bg-muted border-b border-border">
+        {notice.imageUrl ? (
+          <Image
+            src={notice.imageUrl}
             alt={notice.title}
-            className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
+            fill
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+            className="object-cover transition-transform duration-300 group-hover/card:scale-105"
+            unoptimized={false}
           />
-        </div>
-      )}
+        ) : (
+          <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground/60 bg-muted/40 p-4">
+            <FileImageIcon className="size-10 stroke-[1.5] text-muted-foreground/40 mb-2" />
+            <span className="text-xs font-semibold tracking-wider uppercase text-muted-foreground/50">
+              No Image Provided
+            </span>
+          </div>
+        )}
+      </div>
 
       <CardHeader className="flex flex-col gap-2 p-5 pb-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
@@ -124,11 +136,15 @@ export default function NoticeCard({ notice, onDeleteSuccess }: NoticeCardProps)
       </CardContent>
 
       <CardFooter className="flex items-center justify-between p-5 pt-3 border-t border-border bg-muted/20">
-        <Link href={`/notice/${notice.id}`} passHref legacyBehavior>
-          <Button variant="outline" size="sm" className="flex items-center gap-1.5">
-            <EditIcon className="size-3.5" />
-            <span>Edit</span>
-          </Button>
+        <Link
+          href={`/notice/${notice.id}`}
+          className={cn(
+            buttonVariants({ variant: "outline", size: "sm" }),
+            "flex items-center gap-1.5"
+          )}
+        >
+          <EditIcon className="size-3.5" />
+          <span>Edit</span>
         </Link>
         <Button
           variant="ghost"
